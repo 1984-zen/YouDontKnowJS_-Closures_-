@@ -799,3 +799,309 @@ if(true){
 區塊範疇之所以有用的另外一個原因與 closures（閉包-第五章）和取回記憶體用的垃圾回收(garbage collection) 有關。hoisting(拉升-第四章) 後續章節詳解。
 
 雖然有些人如此相信，但區塊範疇不應該被當作用來取代 var 函式範疇的東西，這兩種功能可以共存。函式範疇與區塊範疇技巧都能兼用。
+# Part1-4 拉升
+### Hoisting發生在編譯時期
+let和const會在報錯是因為範疇，要不要提升Hoisting取決於是var還是let,const
+### 概念
+- 範疇(scope)概念
+- 變數依宣告地點與方式的不同被接附到(attached to)不同層級的範疇上
+
+而我們所認為的程式碼被逐行執行是真的嗎？為什麼會有hoisting 現象？
+
+## JavaScript 特有的 hoisting 現象
+### 變數或函式的宣告會提升，賦值不會
+程式碼是一行行被執行的，如果以下面的例子來說，變數`a`還沒被聲明就被賦值，應該會出現什麼？
+```javascript=
+// ex 1
+a = 42;
+var a;
+console.log( a ); 
+```
+我們預期的`undefined`沒出現，卻出現了`42`
+
+
+```javascript=
+// ex 2
+console.log( a );
+var a = 42;
+```
+我們預期的`ReferenceError: a is not defined`沒出現，卻出現了`undefined`為什麼？
+另一個例子
+```javascript=
+// ex 
+function test(n){
+  var n
+  console.log(n)
+  n = 12
+  console.log(n)
+}
+test(42) // 42  12
+```
+
+在程式一行行的被解釋執行之前，JavaScript 一定有做了什麼事...
+JavaScript 是腳本語言、單一序，但在程式碼的任何部分被執行之前，所有的聲明，變數和函式，都會首先被處理，也就是會被預編譯。
+
+#### 語法分析 -->  預編譯 --> 執行程式碼 ，`hoisting` 在預編譯時期產生。
+
+經過 hoisting 實際上程式碼成為：
+```javascript=
+// ex 1 hoisting
+var a;
+a = 42;
+
+console.log( a ); 
+```
+
+```javascript=
+// ex 2 hoisting
+var a
+console.log( a );
+a = 42;
+```
+
+
+### 提升動作是逐範疇(per-scope)進行的
+
+```javascript=
+// ex 3
+foo()
+function foo(){
+  console.log(a)
+  
+  var a = 42
+
+}
+```
+hoisting 現象
+```javascript=
+// ex 3 hoisting
+
+function foo(){
+  var a
+  console.log(a)
+  a = 42
+}
+foo()
+```
+### 函式宣告會被提升，但函式運算式(function expressions)不會
+```javascript=
+// ex 4
+foo();
+
+var foo = function bar(){
+  console.log(a)
+  
+  var a = 42
+}
+// TypeError: foo is not a function
+```
+### 在 scope 裡也會有提升現象
+```javascript=
+// ex 4 hoisting
+var foo
+
+foo();
+bar()
+
+foo = function {
+  var a
+  console.log(a)
+  a = 42
+}
+
+```
+
+## 提升的優先順序 函式 --> 變數
+- function 的宣告也會提升，而且優先權比較變數高
+```javascript=
+// ex 5
+console.log(test) 
+var test
+function test(){}
+// ƒ test(){}
+```
+提升後
+```javascript=
+// ex 5 hoisting
+test()
+
+console.log(test) 
+// var test
+function test(){}
+// ƒ test(){}
+```
+### 變數重複宣告會被忽略，函式重複宣告前面的會被覆寫
+```javascript=
+// ex 6
+foo() // 3
+
+function foo(){
+console.log(1)
+}
+
+var foo = function foo(){
+console.log(2)
+}
+
+function foo(){
+console.log(3)
+}
+```
+
+
+
+### let 跟 const 也會提升
+```javascript=
+console.log(test) // ReferenceError: test is not defined
+let test
+
+console.log(test2) // SyntaxError: Missing initializer in const declaration
+const test2
+```
+let 跟 const 的差別
+
+```javascript=
+var nbr = 42
+function test(){
+  console.log(nbr)
+  let nbr
+}
+test() // ReferenceError: Cannot access 'nbr' before initialization at test
+```
+let 仍有提升，只是提升後的行為跟 var 不一樣，會誤以為它沒有提升。
+TDZ = time ..
+
+
+## hoisting 是怎麼運作的？ 
+語法分析 --> 預編譯 --> 逐行執行
+- 程式碼是如何被預編譯？hoisting 是預編譯時期所產生的
+- 在程式碼的任何部分被執行之前，所有的聲明，變數和函式，都會首先被處理。
+ 
+## 補充 預編譯前奏
+- imply global 暗示全域變數：即任何變數，如果變數未經聲明就賦值，此變數就為全域物件所有。
+ex. a = 123; 
+ex. var a = b = 123; 
+
+```javascript
+function test() {
+  var a = b = 123;
+}
+// b 未聲明 就賦值 這個變數就歸 window 所有
+test();
+window.a; // undefined
+window.b; // 123
+
+```
+
+### 一切聲明的域局變數，全都是window的屬性。window 就是全域
+ex. var a = 123; ==> window.a = 123;
+如同：window( a  : 123)
+```javascript
+// 試著印出不同位置的變數
+function fn(a) {
+  console.log(a);
+  var a = 123;
+  console.log(a);
+  function a() {}
+  console.log(a);
+  var b = function () {}
+  console.log(b);
+  function d() {}
+}
+fn(1)
+```
+
+預編譯發生在函式執行的前一刻
+預編譯四部曲：
+1. 創建一個 AO (Activation Object)的物件物件 -> 作用域（執行期上下文）
+ex. AO{
+  a : undefined -> 1,
+  b : undefined,
+  d : 
+}
+
+2. 找形參和變數聲明，將變數與形參名作 AO 屬性名，值為undefined。
+3. 將實參值與形參統一
+4. 在函式體裡面找函式聲明。並值賦給函式體。 
+a : undefined -> 1 -> function a(){}
+b : undefined -> function b(){}
+d : function d(){}
+
+
+  3. 解釋執行
+  ```javascript
+  function test(a, b) {
+    console.log(a);
+    c = 0;
+    var c;
+    a = 3;
+    b = 2;
+    console.log(b);
+    function b() {}
+    function d() {}
+    console.log(b);
+  }
+  test(1)
+  ```
+  AO{
+    a : undefined -> 1 (把形參和實參相統一) -> 3
+    b : undefined -> function b() {} -> 2
+    c : undefined -> 0 ->
+    d : undefined -> function d() {}
+
+  }
+
+### 預編譯四部曲：
+1. 創建 AO (Activation Object)物件 -> 作用域（執行期上下文）
+2. 找形參和變數聲明，將變數與形參名作 AO 屬性名，值為undefined。
+3. 將實參值與形參統一（把引數和參數統一，也就是將引數的值指向參數位置）
+4. 在函式體裡面找函式聲明。並值賦給函式體。
+
+提升順序：函式->變數->參數
+  AO {
+    a : undefined -> function a() {} -> 123
+    b : undefined -> function () {} -> 234;
+  }
+  console:
+  1. a : function a() {}
+  2. b : undefined
+  3. b : 234;
+  4. a : 123;
+  5. a : 123;
+  6. b : function(){};
+
+## 全域預編譯
+- 預編譯不只發生在函式內，也發生在全域。只是全域裡沒有所謂的參數，所以編譯四部曲的第3會直接跳第4。
+- 全局在預編譯時所產生的不是 AO 物件，而是 GO物件 (Globe Object) / VO 
+  GO == window
+
+可分兩部分來解析 GO{}和AO{}
+GO { // 提升
+    test : function(){};
+
+}
+```javascript
+console.log(test);
+function test(test) {
+  console.log(test);
+  var test = 234;
+  console.log(test);
+  function test() { 
+  }
+}
+test(1);
+var test = 123;
+```
+AO {
+  test : undefined -> 1 -> function(){} -> 234 -> 234
+}
+
+
+
+參考：
+[我知道你懂 hoisting，可是你瞭解到多深？](https://blog.techbridge.cc/2018/11/10/javascript-hoisting/)
+[JavaScript: 變量提升和函數提升](https://www.cnblogs.com/liuhe688/p/5891273.html)
+[(121) 09 递归，预编译（上）](https://www.youtube.com/watch?v=Yas_MUY9ND4&list=PL9nxfq1tlKKnmrO_xsXkBHNFUuZ-02268&index=9)
+[所有的函式都是閉包：談 JS 中的作用域與 Closure](https://blog.techbridge.cc/2018/12/08/javascript-closure/)
+[MDN解釋let](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let)
+[[day21] YDKJS (Scope) : Hoisting ？ let 會 Hoist 嗎 ? - iT 邦幫忙::一起幫忙解決難題，拯救 IT 人的一天](https://ithelp.ithome.com.tw/articles/10225604)
