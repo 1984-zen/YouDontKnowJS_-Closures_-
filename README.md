@@ -522,3 +522,280 @@ console.log(b);     // 2, 全域的b
 // console.log(c);  // ReferenceError: c is not defined
 console.log(obj);   // { a: 1 }
 ```
+# Part1-3 函式vs區塊範疇
+## 函式範疇 (function-based)
+
+範疇 (scope) 由一系列的「泡泡」所構成，而這種巢狀結構 (nesting) 是在編寫時期(author time) 所定義的。範疇皆已定型，包含巢狀結構函式。並不會隨著如何呼叫函式有所改變。
+
+函式範疇中所有**變數**都屬於函式，可重複使用以及在必要時接納不同型別的值 (重新賦值)。
+
+又可大致分為全域範疇 (global) 與區域範疇 (local)。
+
+---
+
+[我知道你懂 hoisting，可是你了解到多深？](https://blog.techbridge.cc/2018/11/10/javascript-hoisting/)
+
+>Every execution context has associated with it a variable object. Variables and functions declared in the source text are added as properties of the variable object. For function code, parameters are added as properties of the variable object.
+
+所有 function 需要的資訊都會存在 EC(Execution Contexts)，執行環境裡面。
+
+- variable object（以下簡稱 VO）
+每個 EC 都會有相對應的 variable object，在裡面宣告的變數跟函式都會被加進 VO 裡面，如果是 function，那參數也會被加到 VO 裡。
+- Activation Object（以下簡稱 AO）
+可以把它直接當作 VO 的另外一種特別的型態，只在 function 的 EC 中出現，所以在 global 的時候我們有 VO，在 function 內的時候我們有 AO，差別在於 AO 裡面會多記載一個 arguments。
+
+引數(Argument) vs. 參數(Parameter) 
+
+```javascript=
+function foo(參數){}
+foo(引數)
+```
+
+---
+
+:::info
+使用「函式範疇」有什麼好處呢？
+- 維持最小權限原則 (principle of least privilege)，以避免變數或函式被不當存取。
+- 避免同名識別字所造成的衝突，這當中包含了避免污染全域命名空間和模組的管理。
+:::
+
+```javascript=
+// globel
+debugger 
+var globalScopeVar = "globalScopeVar"
+globalNokeyword = "globalNokeyword"
+
+// script
+debugger
+const scriptScopeConst = "scriptScopeConst";
+let scriptScopeLet = "scriptScopeLet";
+```
+
+window.globalScopeVar 與 window.globalNokeyword 可在全域屬性查找到。
+使用 const 與 let 關鍵字會分配在 script 區域。
+
+```javascript=
+<script>
+  var globalScopeVar = "globalScopeVar";
+  let scriptScopeLet = "scriptScopeLet";
+</script>
+<script>
+  console.log(globalScopeVar); // "globalScopeVar"
+  console.log(window.globalScopeVar); // "globalScopeVar"
+  console.log(scriptScopeLet); // scriptScopeLet
+  console.log(window.scriptScopeLet); // undefined
+</script>
+```
+
+---
+
+```javascript=
+{
+  debugger
+  var globalScopeVar = "globalScopeVar";
+  const blockScopeConst = "blockScopeConst";
+  let blockScopeLet = "blockScopeLet";
+}
+// BlockScope
+```
+```javascript=
+function foo(a=1){
+debugger
+  var b = 2;
+  let c = 3;
+  return function bar(d=4){ // 內崁範疇 nested scope
+    var e = 5;
+    console.log(a,b,c,d,e);
+  }
+}
+```
+函式參數 a: 1 會被歸類於 localscope
+
+---
+
+### 避免衝突
+
+```javascript=
+function foo(){
+debugger
+  function bar(a){
+    i = 3; // 此時改成 var i = 3; 遮蔽變數「shadowed variable」
+    console.log( a + i);
+  }
+  for(var i = 0; i < 10 ;i++) {
+    bar(i * 2);
+  }
+}
+
+function foo(){
+  var i = undefined;
+  function bar(a){
+    i = 3; // 內崁範疇 nested scope
+    console.log( a + i);
+  } // 偽私域
+  for(var i = 0; i < 10 ;i++) {
+    bar(i * 2);
+  }
+}
+// 3 11 11 11 ...
+```
+
+此時直接在 for 迴圈的標頭 (header) 中宣告變數 var i，易忽略「該變數實際的範疇是包含它的範疇（函式或全域範疇）」這個事實。
+
+```javascript=
+if(true){
+  var bar = 2;
+}// 偽私域
+
+for(var i = 0; i < 10 ;i++) {
+  console.log(i);
+}// 偽私域
+```
+
+此時代表 Window.Properties 可查找到 bar 與 i 識別字。
+
+---
+
+### 全域命名空間 (global namespaces)
+
+透過集中管理全域變數，只對外提供單一組變數，避免全部皆位於頂層語彙範疇的識別字。
+
+```javascript=
+let nameSpaces = {
+  domain: "Uniform Resource Locator",
+  doSomthing(){
+    // ...
+  },
+  doAnothering(){
+    // ...
+  }
+}
+```
+
+### 即刻調用函式運算式 IIFE
+
+利用 Grouping operator()，分組運算子處理。包裹它的第一對 () 使得那個函式成為一個運算式，而那第二對的 () 則會執行該函式。
+
+該函式不會被當成一個標準的宣告 (declaration) 需具名來看待，而是被當作一個函式運算式(function expression)。
+
+```javascript=
+(function(){
+  // doSomething
+})(Actual arguments)
+```
+
+  const blockScopeConst = "blockScopeConst";
+  let blockScopeLet = "blockScopeLet";
+
+```javascript=
+var globalScopeVar = "globalScopeVar";
+
+(function IIFE(window) {
+  var localScopeVar = "localScopeVar";
+  console.log(localScopeVar); // "localScopeVar"
+  console.log(window.globalScopeVar); // "globalScopeVar"
+})(window);
+
+console.log(globalScopeVar); // "globalScopeVar"
+```
+
+---
+
+javascript ES3 規格在早期已提供少許區塊範疇處理方式，包含 with 用法以及以下 try / catch
+
+```javascript=
+try{
+  undefined(); // 迫使一個例外產生的非法作業
+}
+catch(error){
+  console.log(error);
+}
+// TypeError: undefined is not a function at <anonymous>:2:3
+console.log(error);
+// VM1020:1 Uncaught ReferenceError: error is not defined at <anonymous>:1:13
+```
+
+---
+
+## 區塊範疇 (block-scoping)
+
+ES6 最小權限原則 (principle of least privilege)。
+
+```javascript=
+if(true){
+  var bar = 2;
+}// 偽私域
+
+if(true){
+  let bar = 2;
+}// 真區域
+```
+```javascript=
+for(var i = 0; i < 10 ;i++) {
+  console.log(i);
+}// 偽私域
+
+for(let i = 0; i < 10 ;i++) {
+  console.log(i);
+}// 真區域
+console.log(i); // Uncaught ReferenceError: i is not defined
+```
+
+for 迴圈標頭 (header) 中的 let 不只將 i 繫結到 for 迴圈的主體 (body)，實際上它還會將之 **重新繫結(rebinds)** 到迴圈的每次迭代 (iteration)，確保有將前一次迴圈迭代結果產生的值重新指定給它。
+### example
+#### let
+```javascript
+for(let i=0;i<3;i++) {
+    setTimeout(()=>console.log(i),1)
+}
+// 1 2 3
+```
+以上會因為let rebin到每次的迭代，會成以下：
+```javascript
+for(let i=0;i<3;i++) {
+    i=0
+    setTimeout(()=>console.log(i),1)
+}
+for(let i=0;i<3;i++) {
+    i=1
+    setTimeout(()=>console.log(i),1)
+}
+for(let i=0;i<3;i++) {
+    i=2
+    setTimeout(()=>console.log(i),1)
+}
+```
+而用var
+
+```javascript
+for(var i=0;i<3;i++) {
+    setTimeout(()=>console.log(i),1)
+}
+// 3 無限迴圈...因為var i 受到汙染
+```
+
+---
+
+### let keyword
+
+let 關鍵字會把變數宣告接附到 (attaches to) 它所在的(包含它的)區塊(通常是一對 =={...}==)的範疇上。換句話說，**let 為它的變數宣告隱含地劫持了任何區塊的範疇**。
+
+區塊範疇 (block-scoping): 盡可能在離最近的本地 (local) 宣告變數。以 `{}` separator 為範疇。
+
+```javascript=
+if(true){
+  {
+    let bar = 2;
+  }
+}
+
+// 明確區塊繫結方式，只要在能夠使用述句 (statement) 任何地方放入一對{...}時皆可。
+
+{
+  let bar = 2;
+}
+```
+
+區塊範疇之所以有用的另外一個原因與 closures（閉包-第五章）和取回記憶體用的垃圾回收(garbage collection) 有關。hoisting(拉升-第四章) 後續章節詳解。
+
+雖然有些人如此相信，但區塊範疇不應該被當作用來取代 var 函式範疇的東西，這兩種功能可以共存。函式範疇與區塊範疇技巧都能兼用。
