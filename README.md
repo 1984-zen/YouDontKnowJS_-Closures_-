@@ -522,6 +522,9 @@ console.log(b);     // 2, 全域的b
 // console.log(c);  // ReferenceError: c is not defined
 console.log(obj);   // { a: 1 }
 ```
+
+### Hoisting發生在編譯時期
+
 # Part1-3 函式vs區塊範疇
 ## 函式範疇 (function-based)
 
@@ -800,7 +803,6 @@ if(true){
 
 雖然有些人如此相信，但區塊範疇不應該被當作用來取代 var 函式範疇的東西，這兩種功能可以共存。函式範疇與區塊範疇技巧都能兼用。
 # Part1-4 拉升
-### Hoisting發生在編譯時期
 let和const會在報錯是因為範疇，要不要提升Hoisting取決於是var還是let,const
 ### 概念
 - 範疇(scope)概念
@@ -1096,8 +1098,6 @@ AO {
   test : undefined -> 1 -> function(){} -> 234 -> 234
 }
 
-
-
 參考：
 [我知道你懂 hoisting，可是你瞭解到多深？](https://blog.techbridge.cc/2018/11/10/javascript-hoisting/)
 [JavaScript: 變量提升和函數提升](https://www.cnblogs.com/liuhe688/p/5891273.html)
@@ -1105,3 +1105,424 @@ AO {
 [所有的函式都是閉包：談 JS 中的作用域與 Closure](https://blog.techbridge.cc/2018/12/08/javascript-closure/)
 [MDN解釋let](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let)
 [[day21] YDKJS (Scope) : Hoisting ？ let 會 Hoist 嗎 ? - iT 邦幫忙::一起幫忙解決難題，拯救 IT 人的一天](https://ithelp.ithome.com.tw/articles/10225604)
+# Part1-5 範疇的Closure
+### closures的定義：
+closure是函式`記得`並`存取`取其語彙範疇的能力，甚至當函式是在其語彙範疇之外執行時，也是如此。
+### 範例
+```javascript
+function foo() {
+
+var a = 0;
+
+    function run() {
+        a++;
+        return a;
+    }
+    
+    return run
+}
+
+var f = foo();
+```
+
+> closure是發生在宣告時期(declaration time)
+## 接近Closure閉包
+### 語彙範疇查找(Look-up)規則也是Closure的一部份
+
+```javascript
+function foo(){
+    var a = 2;
+    
+    function bar() {
+        console.log(a); //RHS查找到a=2
+    }
+    bar()
+}
+foo();
+```
+## Closure閉包登場
+```javascript
+function foo() {
+    var a = 2
+    function bar() {
+        console.log(a);
+    }
+    return bar; //return到外面的變數baz
+}
+var baz = foo();
+
+baz(); //2
+```
+但在這個情況下，它是在其宣告處的語彙範疇之外執行的。一般來說我們會預期foo()的整個內層範疇會在執行完畢後消失(a=2)，但closure的「魔法」並沒有讓那種事情發生
+
+當變數baz被調用時，它恰如其分的能夠`存取`編寫時期(author-time)的語彙範疇，也就是存取變數a=2
+
+內層bar()函式在語彙範疇上能夠`存取`foo的內層範疇，在這個例子，我們return了bar所參考的那個函式，將它作為一個值來傳遞。
+執行了foo()之後，我們將它所回傳的值(我們內層的bar()函式)指定給了一個叫做baz的變數，然後我們實際調用(invoke)了baz()，等同於調用內層的bar函式。
+
+:::success
+bar()擁有一個語彙語彙範疇封閉包圍(closure over)了foo的內層範疇，bar()之後仍然參考指向那個範疇，而那個參考就叫做closure(閉包)
+:::
+
+
+### 當然，函式可作為值被到處傳遞，舉以下2個closure的例子
+- function作為值傳入參數在其他地方被調用
+```javascript
+function foo() {
+    var a = 2;
+    
+    function baz() {
+    console.log(a); //2
+    }
+    bar(baz)
+}
+function bar(fn) {
+    fn(); //baz()函式仍然有參考指向foo內層的範疇，也就是a=2
+}
+```
+- 不傳入參數，但間接的(indirect)的調用
+```javascript
+var fn;
+function foo() {
+    var a = 2;
+    
+    function baz() {
+        console.log(a) //RHS var a = 2
+    }
+    fn = baz; //baz傳給全域變數fn
+}
+
+function bar() {
+    fn()
+}
+
+foo();
+
+bar(); //2
+```
+### closure四處可見
+- setTimeout
+```javascript
+function wait(message) {
+    setTimeout(function timer() { //timer傳進setTimeout
+    //而有了一個範疇封閉包圍了(closure over)wait()內的範疇
+        console.log(message)
+    },1000);
+}
+wait("Hello, closure!");
+```
+- jQuery
+```javascript
+function setupBot(name, selector) {
+    $(selector).click(function activator() {
+        console.log("Activating: " +name);
+    });
+}
+
+setupBot("Closure Bot 1", "#bot_1")
+setupBot("Closure Bot 2", "#bot_2")
+```
+### IIFE本身不是可觀測的closure實例，它絕對還是會建立範疇，而他是我們最常用來建立覆蓋的範疇工具
+雖然技術上可以說closure事發生在宣告時期，但嚴格來講這個例子是無法被觀測到的。
+```javascript
+var a = 2;
+(function IIFE() {
+    console.log(a); //2 RHS語彙範疇查找到的
+})();
+```
+
+> 這是數在森林中倒落時，周圍什麼人都沒有，沒人去聽樹倒的聲音。
+### 那我們就，來用IIFE做一個觀察closure的例子
+```javascript
+var add = (function() {
+    var count = 0;
+    return function() {
+        return count +=1;
+    }
+})();
+```
+## 迴圈與Closure
+> setTimeout: 到達延遲秒數的時候才執行callback
+> 
+所缺少的東西是：我們語意目標暗示著我們想要讓迴圈的每次迭代都能在該次迭代進行時『捕捉』到它自己的i的一份拷貝。然而，因為範疇的運作方式，所有的那五個函式，雖然都是在各自的迴圈迭代中分別定義的，但他們都會覆蓋(close over)同一個共用的`全域範疇`，其中實際上只有一個i存在
+```javascript
+for (var i=1; i<=5; i++) {
+	setTimeout( function timer(){
+		console.log( i );
+	}, i*1000 );
+}
+```
+試試看用IIFE改寫(還是差一點)：因為如果那個範疇是空的，那麼你覆蓋(close over)它也沒有什麼用
+```javascript
+for(var i = 1; i <=5; i++){
+    (function(){
+        setTimeout(function timer(){
+            console.log(i);
+        }, i*1000);
+    })()
+}
+```
+他需要他自己的變數，來放置每次迭代i值的一份拷貝
+```javascript
+for(var i = 1; i <=5; i++){
+    (function(){
+        var j = i;
+        setTimeout(function timer(){
+            console.log(j)
+        }, j*1000)
+    })()
+}
+```
+關於IIFE有人比較偏好稍微變化的版本是：
+```javascript
+for(var i = 1; i <= 5; i++){
+    (function(j){
+        setTimeout(function timer(){
+            console.log(j);
+        }, j*1000)
+    })(i)
+}
+```
+## 重訪區塊範疇
+> 第3章向我們展示了let宣告，他會劫持一個區塊，並在那個區塊中宣告一個變數。
+
+他(`let`)基本上把一個區塊變成變為了我們能夠覆蓋(closure over)的一個範疇
+不管是前面的IIFE利用closure over的方式讓結果符合我們的預期，實際上我們需要的是每次迭代『專屬』的區塊範疇(有自己的變數儲存i而不被外面影響)。
+```javascript
+for(var i = 1; i<=5; i++){
+    let j =i //好耶，closure的區塊範疇
+    setTimeout(function timer(){
+        console.log(j)
+    }, j*1000)
+}
+```
+還不只這樣，用在一個for迴圈標頭(heade)中的`let`宣告定義有一種特殊的行為，這個行為表示，那個變數不只是為該迴圈宣告一次，而是每次迭代都宣告一次
+```javascript
+for(let i = 1; i<=5; i++){
+    setTimeout(function timer(){
+        console.log(i)
+    }, i*1000)
+}
+```
+## 模組
+- 相較於直接引入每一種功能到應用程式中，開發者們透過模組來提供額外的功能
+- 只裸露出我們想提供的資訊，隱藏資料防止被修改
+### 揭露模組(revealing module)
+```javascript
+function CoolModule() {
+	var something = "cool";
+	var another = [1, 2, 3];
+
+	function doSomething() {
+		console.log( something );
+	}
+
+	function doAnother() {
+		console.log( another.join( " ! " ) );
+	}
+
+	return {
+		doSomething: doSomething,
+		doAnother: doAnother
+	};
+}
+
+var foo = CoolModule();
+
+foo.doSomething(); // cool
+foo.doAnother(); // 1 ! 2 ! 3
+```
+
+### 以簡單的方式來說，要行使模組模式，有兩個必要條件：
+- 必須有一個外層的包含函式，而他必須至少調用一次(每次都會建立一個新的模組實體)
+- 這個包含函式至少得回傳一個內層函式，如此這個內層函式才能有覆蓋到那個私有範疇的closure，因此得以存取或修改那個私有狀態
+
+前面的展示了一個獨立的模組創造器叫做CoolModule()，他可以被調用數次，每次都會建立一個心的模組實體，當你只想要有單一個實體的時候
+#### singleton單體模式：
+確保一個類別只有一個實體，並提供對該實體的全域操作
+> 比如說，生活中每個人只有一個身分證號碼，若證件遺失仍然是用原有身分證號碼補發，並不會因此產生新的身分證號碼。
+```javascript
+var foo = (function CoolModule() {
+	var something = "cool";
+	var another = [1, 2, 3];
+
+	function doSomething() {
+		console.log( something );
+	}
+
+	function doAnother() {
+		console.log( another.join( " ! " ) );
+	}
+
+	return {
+		doSomething: doSomething,
+		doAnother: doAnother
+	};
+})();
+
+foo.doSomething(); // cool
+foo.doAnother(); // 1 ! 2 ! 3
+```
+### 模組只是函式，所以他們能夠接收參數：
+```javascript
+function CoolModule(id) {
+	function identify() {
+		console.log( id );
+	}
+
+	return {
+		identify: identify
+	};
+}
+
+var foo1 = CoolModule( "foo 1" );
+var foo2 = CoolModule( "foo 2" );
+
+foo1.identify(); // "foo 1"
+foo2.identify(); // "foo 2"
+```
+更強大的，為你回傳公開API物件取個名稱：
+模組實體中保留那個公開API物件的一個內層參考，你就能夠從內部去修改那個實體模組，包含新增與移除方法的特性，還有變更它們的值。
+```javascript
+var foo = (function CoolModule(id) {
+	function change() {
+		// 修改公有 API
+		publicAPI.identify = identify2;
+	}
+
+	function identify1() {
+		console.log( id );
+	}
+
+	function identify2() {
+		console.log( id.toUpperCase() );
+	}
+
+	var publicAPI = {
+		change: change,
+		identify: identify1
+	};
+
+	return publicAPI;
+})( "foo module" );
+
+foo.identify(); // foo module
+foo.change();
+foo.identify(); // FOO MODULE
+```
+## 現代模組
+各種模組依存性載入器或管理器，基本上就是把模組定義的這種模式包成一個友善的API，我們不會檢視任何特定的程式庫。
+以下這段程式碼最關鍵的部分是modules[name] = impl.apply(impl, deps)
+這會為一個模組調用(並傳入任何依存性)定義包裹器函式，並將回傳的值，也就是模組的API，存入藉由名稱來紀錄的一個內部模組清單。
+```javascript=
+var MyModules = (function Manager() {
+	var modules = {};
+
+	function define(name, deps, impl) {
+		for (var i=0; i<deps.length; i++) {
+			deps[i] = modules[deps[i]];
+		}
+		modules[name] = impl.apply( impl, deps );
+	}
+
+	function get(name) {
+		return modules[name];
+	}
+
+	return {
+		define: define,
+		get: get
+	};
+})();
+MyModules.define( "bar", [], function(){
+	function hello(who) {
+		return "Let me introduce: " + who;
+	}
+
+	return {
+		hello: hello
+	};
+} );
+
+MyModules.define( "foo", ["bar"], function(bar){
+	var hungry = "hippo";
+
+	function awesome() {
+		console.log( bar.hello( hungry ).toUpperCase() );
+	}
+
+	return {
+		awesome: awesome
+	};
+} );
+
+var bar = MyModules.get( "bar" );
+var foo = MyModules.get( "foo" );
+
+console.log(
+	bar.hello( "hippo" )
+); // Let me introduce: hippo
+
+foo.awesome(); // LET ME INTRODUCE: HIPPO
+```
+## 未來模組
+ES6為模組的概念新增了一級(first-class)的語法支援。經由這個模組系統載入，ES6會把一個檔案當成一個個別的模組。每個模組都能匯入(import)其他的模組或特定的API成員，也能夠匯出(export)他們自己的公開API成員。
+ES6模組沒有『行內`inline`』的格式可以用，他們必須被定義在個別的檔案中(每個模組一個檔案)。瀏覽器或引擎會有一顆預設的『模組載入器』，他會在模組被匯入時，同步的載入一個模組檔案。
+
+bar.js
+```javascript
+function hello(who) {
+	return "Let me introduce: " + who;
+}
+
+export hello;
+```
+foo.js
+```javascript
+// 仅导入“bar”模块中的`hello()`
+import hello from "bar";
+
+var hungry = "hippo";
+
+function awesome() {
+	console.log(
+		hello( hungry ).toUpperCase()
+	);
+}
+
+export awesome;
+```
+```javascript
+// 导入`foo`和`bar`整个模块
+module foo from "foo";
+module bar from "bar";
+
+console.log(
+	bar.hello( "rhino" )
+); // Let me introduce: rhino
+
+foo.awesome(); // LET ME INTRODUCE: HIPPO
+```
+import 在當前的作用域中導入一個模塊的API的一個或多個成員，每個都綁定到一個變量（這個例子中是 hello）。module 將整個模塊的API導入到一個被綁定的變量（這個例子中是 foo，bar）。export 為當前模塊的公有API導出一個標識符（變量，函數）。在一個模塊的定義中，這些操作符可以根據需要使用任意多次。
+
+在 模塊文件 內部的內容被視為像是包圍在一個作用域閉包中，就像早先看到的使用函數閉包的模塊那樣。
+
+### 以下兩個例子差異在return，可看出console.dir模式下的[[Scope]]的不同
+```javascript
+function test(){
+  var a = 10;
+  function baz(){
+    console.log(a);
+  }
+  baz();
+}
+```
+```javascript
+function test(){
+  var a = 10;
+  return function baz(){
+   console.log(a);
+  }
+}
+var sss = test();
+```
